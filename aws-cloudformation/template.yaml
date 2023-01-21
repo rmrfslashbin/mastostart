@@ -1,0 +1,191 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: "mastostart: helping people get started on Mastodon"
+
+Parameters:
+  ParamAppName:
+    Type: String
+    Default: mastostart
+    Description: Application/stack name.
+
+  ParamDDBTablePrefix:
+    Type: String
+    Default: mastostart-
+    Description: DDB table to favorites.
+
+Globals:
+  Function:
+    Timeout: 60
+
+Resources:
+  DDBAppCredsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ParamDDBTablePrefix}app-credentials"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: InstanceURL
+          AttributeType: S
+      KeySchema:
+        - AttributeName: InstanceURL
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: "Application"
+          Value: !Ref ParamAppName
+
+  DDBConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ParamDDBTablePrefix}config"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ConfigKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ConfigKey
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: "Application"
+          Value: !Ref ParamAppName
+
+  DDBUserCredsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ParamDDBTablePrefix}user-credentials"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: InstanceURL
+          AttributeType: S
+        - AttributeName: UserID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: InstanceURL
+          KeyType: HASH
+        - AttributeName: UserID
+          KeyType: RANGE
+      Tags:
+        - Key: "Application"
+          Value: !Ref ParamAppName
+
+  PolicyMastostartDDBAccess:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: !Sub "${ParamAppName}-DDBAccess"
+      Roles:
+        - !Ref RoleLambdaExecution
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:Query
+              - dynamodb:DeleteItem
+            Resource:
+              - !GetAtt DDBAppCredsTable.Arn
+              - !GetAtt DDBUserCredsTable.Arn
+              - !GetAtt DDBConfigTable.Arn
+
+  RoleLambdaExecution:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Tags:
+        - Key: "Application"
+          Value: !Ref ParamAppName
+
+  FunctionMastostart:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Mastotart primary function
+      FunctionName: !Sub ${ParamAppName}
+      CodeUri: ../bin/lambda/mastostart
+      Handler: bootstrap
+      Runtime: provided.al2
+      Architectures: [arm64]
+      Role: !GetAtt RoleLambdaExecution.Arn
+      Tags:
+        Application: !Ref ParamAppName
+
+  InvokePermissionFunctionMastostart:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref FunctionMastostart
+      Action: "lambda:InvokeFunction"
+      Principal: apigateway.amazonaws.com
+
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: "Mastosart API"
+      ProtocolType: "HTTP"
+      Tags:
+        Application: !Ref ParamAppName
+
+  HttpApiIntegrationMastostart:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      Description: Lambda proxy integration for mastostart
+      IntegrationType: AWS_PROXY
+      IntegrationMethod: POST
+      PayloadFormatVersion: "2.0"
+      IntegrationUri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FunctionMastostart.Arn}/invocations"
+
+  HttpApiRouteMastostart:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "$default"
+      AuthorizationType: NONE
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref HttpApiIntegrationMastostart
+
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      AutoDeploy: true
+      DeploymentId: !Ref HttpApiDeployment
+      StageName: "$default"
+      ApiId: !Ref HttpApi
+
+  HttpApiDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - HttpApiRouteMastostart
+    Properties:
+      ApiId: !Ref HttpApi
+
+Outputs:
+  AppName:
+    Description: The name of the application.
+    Value: !Ref ParamAppName
+  AppCredsTable:
+    Description: The name of the DDB table for app credentials.
+    Value: !Ref DDBAppCredsTable
+  ConfigTable:
+    Description: The name of the DDB table for config.
+    Value: !Ref DDBConfigTable
+  UserCredsTable:
+    Description: The name of the DDB table for user credentials.
+    Value: !Ref DDBUserCredsTable
+  ApiGateway:
+    Description: API Gateway endpoint URL for Staging stage for mastostart API
+    Value: !GetAtt HttpApi.ApiEndpoint
