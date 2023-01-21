@@ -1,4 +1,5 @@
 # mastostart
+Mastostart provides a simple way to login to Mastodon using OAuth2. It is designed to be used as a backend for a web app.
 
 ## Set up
 - Set up AWS CLI.
