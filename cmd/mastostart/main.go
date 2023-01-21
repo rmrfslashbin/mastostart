@@ -30,7 +30,7 @@ type Context struct {
 
 // ConfigSetCmd sets a config value
 type ConfigSetCmd struct {
-	Key     string `name:"key" required:"" enum:"app_name,website,redirect_uri" help:"The key to set."`
+	Key     string `name:"key" required:"" enum:"app_name,permit_instances,redirect_uri,website," help:"The key to set."`
 	Value   string `name:"value" required:"" help:"The value to set."`
 	Profile string `name:"profile" default:"default" help:"The profile to set the value for."`
 	Region  string `name:"region" default:"us-east-1" help:"The region to set the value for."`

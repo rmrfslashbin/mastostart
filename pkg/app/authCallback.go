@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -63,6 +64,50 @@ func (cfg *Config) authCallback(c *fiber.Ctx) error {
 			ErrorMessage:    "unable to parse instance_url",
 		})
 		return c.Status(fiber.ErrBadRequest.Code).SendString(string(e))
+	}
+
+	// Get the instance permit list
+	permitInstances, err := cfg.db.GetConfig("permit_instances")
+	if err != nil {
+		guid := xid.New()
+		log.Error().
+			Err(err).
+			Str("method", c.Method()).
+			Str("originalURL", c.OriginalURL()).
+			Str("function", "authCallback::cfg.db.GetConfig('permit_instances')").
+			Str("errRef", guid.String()).
+			Msg("Unable get permit_instances from database")
+		e, _ := json.Marshal(&GeneralRestError{
+			ErrorInstanceID: guid.String(),
+			ErrorMessage:    "server side failure. please report the error_instance_id to the admin",
+		})
+		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
+	}
+
+	// Check if the instance is in the permit list
+	if permitInstances != nil {
+		permitList := make(map[string]struct{})
+		for _, instance := range strings.Split(permitInstances.ConfigValue, ",") {
+			permitList[strings.ToLower(strings.TrimSpace(instance))] = struct{}{}
+		}
+
+		if len(permitList) > 0 {
+			if _, ok := permitList[strings.ToLower(instanceURL.Host)]; !ok {
+				guid := xid.New()
+				cfg.log.Error().
+					Str("method", c.Method()).
+					Str("originalURL", c.OriginalURL()).
+					Str("errRef", guid.String()).
+					Str("function", "authLogin::CheckPermitInstanceList").
+					Str("instanceURL", instanceURL.Host).
+					Msg("instance not in permit list")
+				e, _ := json.Marshal(&GeneralRestError{
+					ErrorInstanceID: guid.String(),
+					ErrorMessage:    "instance not in permit list",
+				})
+				return c.Status(fiber.ErrBadRequest.Code).SendString(string(e))
+			}
+		}
 	}
 
 	// Get the app credentials from the database
