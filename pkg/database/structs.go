@@ -29,11 +29,3 @@ type ConfigItem struct {
 	ConfigKey   string `json:"config_key"`
 	ConfigValue string `json:"config_value"`
 }
-
-// UserCredentials represents a user credentials item in the database.
-type UserCredentials struct {
-	InstanceURL string `json:"instance_url"`
-	UserID      string `json:"user_id"`
-	Username    string `json:"username"`
-	CreatedAt   string `json:"created_at"`
-}

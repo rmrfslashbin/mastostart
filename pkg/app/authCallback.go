@@ -248,36 +248,6 @@ func (cfg *Config) authCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
 	}
 
-	// Store the user's credentials in the database
-	/* There's no need to store the user in the database. The access token is encoded in the JWT.
-	createdAt := time.Now().UTC().Format(time.RFC3339)
-	if err := cfg.db.PutUserCredentials(&database.UserCredentials{
-		InstanceURL: instanceURL,
-		UserID:      string(me.ID),
-		Username:    me.Username,
-		CreatedAt:   createdAt,
-	}); err != nil {
-		guid := xid.New()
-		log.Error().
-			Err(err).
-			Str("method", c.Method()).
-			Str("originalURL", c.OriginalURL()).
-			Str("function", "authRedirect::cfg.db.PutUserCredentials()").
-			Str("instanceURL", instanceURL).
-			Str("userID", string(me.ID)).
-			Str("accessToken", *accessToken).
-			Str("username", me.Username).
-			Str("createdAt", createdAt).
-			Str("errRef", guid.String()).
-			Msg("Unable to put user credentials")
-		e, _ := json.Marshal(&GeneralRestError{
-			ErrorInstanceID: guid.String(),
-			ErrorMessage:    "server side failure. please report the error_instance_id to the admin",
-		})
-		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
-	}
-	*/
-
 	// Get RSA private key for signing JWT
 	privateKey, err := cfg.getRSAPrivateKey()
 	if err != nil {
