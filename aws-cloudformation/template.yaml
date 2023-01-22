@@ -52,25 +52,6 @@ Resources:
         - Key: "Application"
           Value: !Ref ParamAppName
 
-  DDBUserCredsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub "${ParamDDBTablePrefix}user-credentials"
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: InstanceURL
-          AttributeType: S
-        - AttributeName: UserID
-          AttributeType: S
-      KeySchema:
-        - AttributeName: InstanceURL
-          KeyType: HASH
-        - AttributeName: UserID
-          KeyType: RANGE
-      Tags:
-        - Key: "Application"
-          Value: !Ref ParamAppName
-
   PolicyMastostartDDBAccess:
     Type: "AWS::IAM::Policy"
     Properties:
@@ -88,7 +69,6 @@ Resources:
               - dynamodb:DeleteItem
             Resource:
               - !GetAtt DDBAppCredsTable.Arn
-              - !GetAtt DDBUserCredsTable.Arn
               - !GetAtt DDBConfigTable.Arn
 
   RoleLambdaExecution:
@@ -183,9 +163,6 @@ Outputs:
   ConfigTable:
     Description: The name of the DDB table for config.
     Value: !Ref DDBConfigTable
-  UserCredsTable:
-    Description: The name of the DDB table for user credentials.
-    Value: !Ref DDBUserCredsTable
   ApiGateway:
     Description: API Gateway endpoint URL for Staging stage for mastostart API
     Value: !GetAtt HttpApi.ApiEndpoint
