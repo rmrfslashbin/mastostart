@@ -3,12 +3,14 @@ package app
 import (
 	"errors"
 	"net/url"
+	"strings"
 
 	"github.com/rmrfslashbin/mastostart/pkg/database"
 	"github.com/rmrfslashbin/mastostart/pkg/mastoclient"
 	"github.com/rs/xid"
 )
 
+// createAppCreds creates an app on the instance and returns the credentials
 func (cfg *Config) createAppCreds(instanceURL *url.URL) (*database.AppCredentials, error) {
 	// Get redirect_uri from database
 	redirectURI, err := cfg.db.GetConfig("redirect_uri")
@@ -71,6 +73,32 @@ func (cfg *Config) createAppCreds(instanceURL *url.URL) (*database.AppCredential
 		return nil, errors.New(guid.String() + ": 'website' key/value pair is nil (not found in database). Maybe run setup?")
 	}
 
+	// Get website from database
+	scopeConfig, err := cfg.db.GetConfig("scopes")
+	if err != nil {
+		guid := xid.New()
+		cfg.log.Error().
+			Err(err).
+			Str("errRef", guid.String()).
+			Str("function", "createAppCreds::cfg.db.GetConfig('scopes')").
+			Msg("error fetching 'scopes' key/value pair from ddb")
+		return nil, errors.New(guid.String() + ": error fetching 'scopes' key/value pair from ddb")
+	}
+	if scopeConfig == nil {
+		guid := xid.New()
+		cfg.log.Error().
+			Str("errRef", guid.String()).
+			Str("function", "createAppCreds::scopeConfig == nil").
+			Msg("'scopeConfig' key/value pair is nil (not found in database). Maybe run setup?")
+		return nil, errors.New(guid.String() + ": 'scopeConfig' key/value pair is nil (not found in database). Maybe run setup?")
+	}
+
+	// Split and clean up the scopes
+	scopes := strings.Split(scopeConfig.ConfigValue, ",")
+	for i, scope := range scopes {
+		scopes[i] = strings.ToLower(strings.TrimSpace(scope))
+	}
+
 	// Construct the redirect URI
 	redirectURIStr := redirectURI.ConfigValue + "?instance_url=" + instanceURL.String()
 
@@ -79,7 +107,7 @@ func (cfg *Config) createAppCreds(instanceURL *url.URL) (*database.AppCredential
 		ClientName:  appName.ConfigValue,
 		InstanceURL: instanceURL.String(),
 		RedirectURI: redirectURIStr,
-		Scopes:      []string{"read", "write", "follow"},
+		Scopes:      scopes,
 		Website:     website.ConfigValue,
 	})
 	if err != nil {
@@ -96,7 +124,6 @@ func (cfg *Config) createAppCreds(instanceURL *url.URL) (*database.AppCredential
 		return nil, errors.New(guid.String() + ": error registering app")
 	}
 
-	// Save the app credentials in the database
 	newApp := &database.AppCredentials{
 		InstanceURL:  instanceURL.Host,
 		ID:           string(app.ID),
@@ -107,6 +134,8 @@ func (cfg *Config) createAppCreds(instanceURL *url.URL) (*database.AppCredential
 		ClientSecret: app.ClientSecret,
 		AuthURI:      app.AuthURI,
 	}
+
+	// Save the app credentials in the database
 	if err := cfg.db.PutAppCredentials(newApp); err != nil {
 		guid := xid.New()
 		cfg.log.Error().
@@ -126,17 +155,9 @@ func (cfg *Config) createAppCreds(instanceURL *url.URL) (*database.AppCredential
 		Str("instanceURL", instanceURL.String()).
 		Str("redirectURI", redirectURIStr).
 		Str("website", website.ConfigValue).
-		Msg("done")
+		Str("scopes", strings.Join(scopes, ",")).
+		Msg("created mastodon app credentials")
 
 	// Return the app credentials
-	return &database.AppCredentials{
-		AuthURI:      app.AuthURI,
-		ClientID:     app.ClientID,
-		ClientSecret: app.ClientSecret,
-		ID:           string(app.ID),
-		InstanceURL:  instanceURL.Host,
-		RedirectURI:  redirectURIStr,
-		Name:         appName.ConfigValue,
-		Website:      website.ConfigValue,
-	}, nil
+	return newApp, nil
 }

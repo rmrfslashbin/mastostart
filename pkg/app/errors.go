@@ -1,8 +1,12 @@
 package app
 
+// GeneralRestError is the error returned by the Mastodon API
 type GeneralRestError struct {
+	// ErrorInstanceID is a unique identifier for this error instance; useful for error log cross-referencing
 	ErrorInstanceID string `json:"error_instance_id"`
-	ErrorMessage    string `json:"error_message"`
+
+	// ErrorMessage is the error message returned to the user
+	ErrorMessage string `json:"error_message"`
 }
 
 // NoDB is returned when the no database is provided

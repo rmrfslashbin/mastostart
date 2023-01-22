@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -15,22 +16,11 @@ import (
 	fiberadapter "github.com/awslabs/aws-lambda-go-api-proxy/fiber"
 	"github.com/gofiber/fiber/v2"
 	jwtware "github.com/gofiber/jwt/v3"
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/rmrfslashbin/mastostart/pkg/database"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
-
-type JWTClaims struct {
-	AccessToken string `json:"access_token"`
-	jwt.RegisteredClaims
-}
-
-type LoginUserOutput struct {
-	UserCreds *database.UserCredentials
-	AuthURI   *string
-}
 
 // Options for the app instance
 type Option func(c *Config)
@@ -59,10 +49,12 @@ func New(opts ...Option) (*Config, error) {
 		cfg.log = &log
 	}
 
+	// Fail if no database is provided
 	if cfg.db == nil {
 		return nil, &NoDB{}
 	}
 
+	// Set up Fiber
 	cfg.app = fiber.New()
 	cfg.appSetup()
 	cfg.fiberLambda = fiberadapter.New(cfg.app)
@@ -84,25 +76,55 @@ func WithLogger(log *zerolog.Logger) Option {
 	}
 }
 
+// appSetup sets up the Fiber app
 func (cfg *Config) appSetup() error {
+	// Set up the "/" route
+	cfg.app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("Hello, World!")
+	})
+
+	// Add non-auth routes
+	cfg.app.Get("/auth/callback", cfg.authCallback)
+	cfg.app.Get("/auth/login", cfg.authLogin)
+
+	// Install JWT Middleware
+	// All following routes require a valid JWT
+	if privateKey, err := cfg.getRSAPrivateKey(); err != nil {
+		return err
+	} else {
+		cfg.app.Use(jwtware.New(jwtware.Config{
+			SigningMethod: "RS256",
+			SigningKey:    privateKey.Public(),
+		}))
+	}
+
+	// Add auth routes
+	cfg.app.Get("/auth/verify", cfg.authVerify)
+
+	return nil
+}
+
+// getRSAPrivateKey gets the RSA private key from the database
+func (cfg *Config) getRSAPrivateKey() (*rsa.PrivateKey, error) {
+	// Get the RSA private key from the database
 	jwtSingingKeyEncoded, err := cfg.db.GetConfig("jwt_signing_key")
 	if err != nil {
 		guid := xid.New()
 		log.Error().
 			Err(err).
-			Str("function", "app::appSetup()::cfg.db.GetConfig('jwt_signing_key')").
+			Str("function", "app::getRSAPrivateKey()::cfg.db.GetConfig('jwt_signing_key')").
 			Str("errRef", guid.String()).
 			Msg("Error getting jwt_signing_key from database")
-		return errors.New(guid.String() + ": Error to getting jwt_signing_key from database")
+		return nil, errors.New(guid.String() + ": Error to getting jwt_signing_key from database")
 	}
 
 	if jwtSingingKeyEncoded == nil {
 		guid := xid.New()
 		log.Error().
-			Str("function", "app::appSetup()::cfg.db.GetConfig('jwt_signing_key')").
+			Str("function", "app::getRSAPrivateKey()::cfg.db.GetConfig('jwt_signing_key')").
 			Str("errRef", guid.String()).
 			Msg("Error get jwt_signing_key from database")
-		return errors.New(guid.String() + ": Error to get jwt_signing_key from database")
+		return nil, errors.New(guid.String() + ": Error to get jwt_signing_key from database")
 	}
 
 	// Decode the PEM formatted RSA private signing key
@@ -110,10 +132,10 @@ func (cfg *Config) appSetup() error {
 	if block == nil || block.Type != "RSA PRIVATE KEY" {
 		guid := xid.New()
 		log.Error().
-			Str("function", "app::appSetup()::pem.Decode([]byte(jwtSingingKeyEncoded.ConfigValue))").
+			Str("function", "app::getRSAPrivateKey()::pem.Decode([]byte(jwtSingingKeyEncoded.ConfigValue))").
 			Str("errRef", guid.String()).
 			Msg("Unable to decode jwt_signing_key PEM from database")
-		return errors.New(guid.String() + ": Unable to decode jwt_signing_key PEM from database")
+		return nil, errors.New(guid.String() + ": Unable to decode jwt_signing_key PEM from database")
 	}
 
 	// Parse the PEM encoded RSA private signing key
@@ -122,32 +144,16 @@ func (cfg *Config) appSetup() error {
 		guid := xid.New()
 		log.Error().
 			Err(err).
-			Str("function", "app::appSetup()::x509.ParsePKCS1PrivateKey(block.Bytes)").
+			Str("function", "app::getRSAPrivateKey()::x509.ParsePKCS1PrivateKey(block.Bytes)").
 			Str("errRef", guid.String()).
 			Msg("Unable to parse PEM to RSA private key")
-		return errors.New(guid.String() + ": Unable to parse PEM to RSA private key")
+		return nil, errors.New(guid.String() + ": Unable to parse PEM to RSA private key")
 	}
 
-	cfg.app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Hello, World!")
-	})
-
-	cfg.app.Get("/auth/callback", cfg.authCallback)
-	cfg.app.Get("/auth/login", cfg.authLogin)
-
-	// JWT Middleware
-	cfg.app.Use(jwtware.New(jwtware.Config{
-		SigningMethod: "RS256",
-		SigningKey:    privateKey.Public(),
-	}))
-
-	cfg.app.Get("/auth/verify", cfg.authVerify)
-
-	return nil
+	return privateKey, nil
 }
 
-// LambdaHandler will deal with Fiber working with Lambda
+// LambdaHandler is the entry point for the Lambda function
 func (cfg *Config) LambdaHandler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	// If no name is provided in the HTTP request body, throw an error
 	return cfg.fiberLambda.ProxyWithContextV2(ctx, req)
 }

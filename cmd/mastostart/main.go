@@ -30,7 +30,7 @@ type Context struct {
 
 // ConfigSetCmd sets a config value
 type ConfigSetCmd struct {
-	Key     string `name:"key" required:"" enum:"app_name,permit_instances,redirect_uri,website," help:"The key to set."`
+	Key     string `name:"key" required:"" enum:"app_name,permit_instances,redirect_uri,scopes,website," help:"The key to set."`
 	Value   string `name:"value" required:"" help:"The value to set."`
 	Profile string `name:"profile" default:"default" help:"The profile to set the value for."`
 	Region  string `name:"region" default:"us-east-1" help:"The region to set the value for."`
@@ -40,9 +40,9 @@ type ConfigSetCmd struct {
 // Run is the entry point for the config set command
 func (r *ConfigSetCmd) Run(ctx *Context) error {
 	db, err := database.New(
-		database.SetDDBProfile(r.Profile),
-		database.SetDDBRegion(r.Region),
-		database.SetDDBTablePrefix(r.Prefix),
+		database.WithDDBProfile(r.Profile),
+		database.WithDDBRegion(r.Region),
+		database.WithDDBTablePrefix(r.Prefix),
 	)
 	if err != nil {
 		return err
@@ -75,9 +75,9 @@ type ConfigGetCmd struct {
 // Run is the entry point for the config get command
 func (r *ConfigGetCmd) Run(ctx *Context) error {
 	db, err := database.New(
-		database.SetDDBProfile(r.Profile),
-		database.SetDDBRegion(r.Region),
-		database.SetDDBTablePrefix(r.Prefix),
+		database.WithDDBProfile(r.Profile),
+		database.WithDDBRegion(r.Region),
+		database.WithDDBTablePrefix(r.Prefix),
 	)
 	if err != nil {
 		return err
@@ -124,9 +124,9 @@ func (r *ConfigMakeJWTKey) Run(ctx *Context) error {
 	}
 
 	db, err := database.New(
-		database.SetDDBProfile(r.Profile),
-		database.SetDDBRegion(r.Region),
-		database.SetDDBTablePrefix(r.Prefix),
+		database.WithDDBProfile(r.Profile),
+		database.WithDDBRegion(r.Region),
+		database.WithDDBTablePrefix(r.Prefix),
 	)
 	if err != nil {
 		return err

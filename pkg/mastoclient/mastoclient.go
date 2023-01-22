@@ -128,6 +128,39 @@ func (cfg *Config) preflight() (*mastodon.Client, error) {
 	return client, nil
 }
 
+// GetAuthTokenFromCode gets an auth token from an auth code
+func (cfg *Config) GetAuthTokenFromCode(authCode *string, redirectURI *string) (*string, error) {
+	client, err := cfg.preflight()
+	if err != nil {
+		return nil, err
+	}
+
+	if err = client.AuthenticateToken(context.Background(), *authCode, *redirectURI); err != nil {
+		return nil, err
+	}
+
+	return &client.Config.AccessToken, nil
+}
+
+// GetLastStatus gets the last status of a user
+func (cfg *Config) GetLastStatus(id *mastodon.ID) (*mastodon.Status, error) {
+	client, err := cfg.preflight()
+	if err != nil {
+		return nil, err
+	}
+
+	statuses, err := client.GetAccountStatuses(context.Background(), *id, &mastodon.Pagination{Limit: 1})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(statuses) < 1 {
+		return nil, nil
+	}
+
+	return statuses[0], nil
+}
+
 // GetUserByID gets a user by ID
 func (cfg *Config) GetUserByID(id string) (*mastodon.Account, error) {
 	client, err := cfg.preflight()
@@ -172,19 +205,7 @@ func (cfg *Config) Post(toot *mastodon.Toot) (*mastodon.ID, error) {
 	}
 }
 
-func (cfg *Config) GetAuthTokenFromCode(authCode *string, redirectURI *string) (*string, error) {
-	client, err := cfg.preflight()
-	if err != nil {
-		return nil, err
-	}
-
-	if err = client.AuthenticateToken(context.Background(), *authCode, *redirectURI); err != nil {
-		return nil, err
-	}
-
-	return &client.Config.AccessToken, nil
-}
-
+// RegisterAppInput is the input for RegisterApp
 func RegisterApp(input *RegisterAppInput) (*mastodon.Application, error) {
 	app, err := mastodon.RegisterApp(context.Background(), &mastodon.AppConfig{
 		Server:       input.InstanceURL,

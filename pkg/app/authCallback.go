@@ -1,9 +1,7 @@
 package app
 
 import (
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"net/url"
 	"strings"
 	"time"
@@ -15,8 +13,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// authCallback is the handler for the /auth/callback endpoint
 func (cfg *Config) authCallback(c *fiber.Ctx) error {
-	// Fetch the code and instance_url query params
+	// Fetch the code query param
 	code := c.Query("code")
 	if code == "" {
 		guid := xid.New()
@@ -33,6 +32,7 @@ func (cfg *Config) authCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrBadRequest.Code).SendString(string(e))
 	}
 
+	// Fetch the instance_url query param
 	rawInstanceURL := c.Query("instance_url")
 	if rawInstanceURL == "" {
 		guid := xid.New()
@@ -49,6 +49,7 @@ func (cfg *Config) authCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrBadRequest.Code).SendString(string(e))
 	}
 
+	// Parse the instance_url
 	instanceURL, err := url.Parse(rawInstanceURL)
 	if err != nil {
 		guid := xid.New()
@@ -66,17 +67,17 @@ func (cfg *Config) authCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrBadRequest.Code).SendString(string(e))
 	}
 
-	// Get the instance permit list
-	permitInstances, err := cfg.db.GetConfig("permit_instances")
+	// Get the app name
+	appNameConfig, err := cfg.db.GetConfig("app_name")
 	if err != nil {
 		guid := xid.New()
 		log.Error().
 			Err(err).
 			Str("method", c.Method()).
 			Str("originalURL", c.OriginalURL()).
-			Str("function", "authCallback::cfg.db.GetConfig('permit_instances')").
+			Str("function", "authCallback::cfg.db.GetConfig('app_name')").
 			Str("errRef", guid.String()).
-			Msg("Unable get permit_instances from database")
+			Msg("Unable get app_name from database")
 		e, _ := json.Marshal(&GeneralRestError{
 			ErrorInstanceID: guid.String(),
 			ErrorMessage:    "server side failure. please report the error_instance_id to the admin",
@@ -84,30 +85,43 @@ func (cfg *Config) authCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
 	}
 
-	// Check if the instance is in the permit list
-	if permitInstances != nil {
-		permitList := make(map[string]struct{})
-		for _, instance := range strings.Split(permitInstances.ConfigValue, ",") {
-			permitList[strings.ToLower(strings.TrimSpace(instance))] = struct{}{}
-		}
+	// Set a defailt app name if it's not set
+	appName := strings.TrimSpace(appNameConfig.ConfigValue)
+	if appName == "" {
+		appName = "mastostart"
+	}
 
-		if len(permitList) > 0 {
-			if _, ok := permitList[strings.ToLower(instanceURL.Host)]; !ok {
-				guid := xid.New()
-				cfg.log.Error().
-					Str("method", c.Method()).
-					Str("originalURL", c.OriginalURL()).
-					Str("errRef", guid.String()).
-					Str("function", "authLogin::CheckPermitInstanceList").
-					Str("instanceURL", instanceURL.Host).
-					Msg("instance not in permit list")
-				e, _ := json.Marshal(&GeneralRestError{
-					ErrorInstanceID: guid.String(),
-					ErrorMessage:    "instance not in permit list",
-				})
-				return c.Status(fiber.ErrBadRequest.Code).SendString(string(e))
-			}
-		}
+	permitted, err := cfg.checkPermitInstanceList(instanceURL)
+	if err != nil {
+		guid := xid.New()
+		log.Error().
+			Err(err).
+			Str("method", c.Method()).
+			Str("originalURL", c.OriginalURL()).
+			Str("function", "authCallback::cfg.checkPermitInstanceList(instanceURL)").
+			Str("errRef", guid.String()).
+			Msg("Unable get do permit instance list check")
+		e, _ := json.Marshal(&GeneralRestError{
+			ErrorInstanceID: guid.String(),
+			ErrorMessage:    "server side failure. please report the error_instance_id to the admin",
+		})
+		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
+	}
+
+	if !*permitted {
+		guid := xid.New()
+		cfg.log.Error().
+			Str("method", c.Method()).
+			Str("originalURL", c.OriginalURL()).
+			Str("errRef", guid.String()).
+			Str("function", "authCallback::CheckPermitInstanceList").
+			Str("instanceURL", instanceURL.Host).
+			Msg("instance not in permit list")
+		e, _ := json.Marshal(&GeneralRestError{
+			ErrorInstanceID: guid.String(),
+			ErrorMessage:    "instance not in permit list",
+		})
+		return c.Status(fiber.ErrBadRequest.Code).SendString(string(e))
 	}
 
 	// Get the app credentials from the database
@@ -128,6 +142,7 @@ func (cfg *Config) authCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
 	}
 
+	// If no app is set up, someone is doing something they shouldn't
 	if appCreds == nil {
 		guid := xid.New()
 		log.Error().
@@ -143,16 +158,18 @@ func (cfg *Config) authCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
 	}
 
+	// Get the full URL of the instance
 	instanceUrlStr := instanceURL.String()
 
 	// Create a new mastoclient instance
 	mastodon, err := mastoclient.New(
-		mastoclient.WithInstance(&instanceUrlStr),
+		mastoclient.WithAccessToken(nil), // access client is not needed for this step
 		mastoclient.WithClientkey(&appCreds.ClientID),
 		mastoclient.WithClientSecret(&appCreds.ClientSecret),
-		mastoclient.WithAccessToken(nil), // access client is not needed for this step
+		mastoclient.WithInstance(&instanceUrlStr),
 		mastoclient.WithLogger(cfg.log),
 	)
+
 	if err != nil {
 		guid := xid.New()
 		log.Error().
@@ -173,7 +190,7 @@ func (cfg *Config) authCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
 	}
 
-	// Get the access token from Mastodon
+	// Using the OAuth2 code, get the access token
 	accessToken, err := mastodon.GetAuthTokenFromCode(&code, &appCreds.RedirectURI)
 	if err != nil {
 		guid := xid.New()
@@ -231,118 +248,67 @@ func (cfg *Config) authCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
 	}
 
-	/*
-		// Store the user's credentials in the database
-		createdAt := time.Now().UTC().Format(time.RFC3339)
-		if err := cfg.db.PutUserCredentials(&database.UserCredentials{
-			InstanceURL: instanceURL,
-			UserID:      string(me.ID),
-			Username:    me.Username,
-			CreatedAt:   createdAt,
-		}); err != nil {
+	// Store the user's credentials in the database
+	/* There's no need to store the user in the database. The access token is encoded in the JWT.
+	createdAt := time.Now().UTC().Format(time.RFC3339)
+	if err := cfg.db.PutUserCredentials(&database.UserCredentials{
+		InstanceURL: instanceURL,
+		UserID:      string(me.ID),
+		Username:    me.Username,
+		CreatedAt:   createdAt,
+	}); err != nil {
+		guid := xid.New()
+		log.Error().
+			Err(err).
+			Str("method", c.Method()).
+			Str("originalURL", c.OriginalURL()).
+			Str("function", "authRedirect::cfg.db.PutUserCredentials()").
+			Str("instanceURL", instanceURL).
+			Str("userID", string(me.ID)).
+			Str("accessToken", *accessToken).
+			Str("username", me.Username).
+			Str("createdAt", createdAt).
+			Str("errRef", guid.String()).
+			Msg("Unable to put user credentials")
+		e, _ := json.Marshal(&GeneralRestError{
+			ErrorInstanceID: guid.String(),
+			ErrorMessage:    "server side failure. please report the error_instance_id to the admin",
+		})
+		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
+	}
+	*/
+
+	// Get RSA private key for signing JWT
+	privateKey, err := cfg.getRSAPrivateKey()
+	if err != nil {
+		if err != nil {
 			guid := xid.New()
 			log.Error().
 				Err(err).
 				Str("method", c.Method()).
 				Str("originalURL", c.OriginalURL()).
-				Str("function", "authRedirect::cfg.db.PutUserCredentials()").
-				Str("instanceURL", instanceURL).
-				Str("userID", string(me.ID)).
-				Str("accessToken", *accessToken).
-				Str("username", me.Username).
-				Str("createdAt", createdAt).
+				Str("function", "authCallback::cfg.getRSAPrivateKey()").
 				Str("errRef", guid.String()).
-				Msg("Unable to put user credentials")
+				Msg("Unable fetch RSA private key")
 			e, _ := json.Marshal(&GeneralRestError{
 				ErrorInstanceID: guid.String(),
 				ErrorMessage:    "server side failure. please report the error_instance_id to the admin",
 			})
 			return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
 		}
-	*/
-
-	// Get the PEM encoded JWT RSA private signing key from the database
-	jwtSingingKeyEncoded, err := cfg.db.GetConfig("jwt_signing_key")
-	if err != nil {
-		guid := xid.New()
-		log.Error().
-			Err(err).
-			Str("method", c.Method()).
-			Str("originalURL", c.OriginalURL()).
-			Str("function", "authCallback::cfg.db.GetConfig('jwt_signing_key')").
-			Str("errRef", guid.String()).
-			Msg("Unable get jwt_signing_key from database")
-		e, _ := json.Marshal(&GeneralRestError{
-			ErrorInstanceID: guid.String(),
-			ErrorMessage:    "server side failure. please report the error_instance_id to the admin",
-		})
-		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
 	}
-	if jwtSingingKeyEncoded == nil {
-		guid := xid.New()
-		log.Error().
-			Str("method", c.Method()).
-			Str("originalURL", c.OriginalURL()).
-			Str("function", "authCallback::if jwtSingingKeyEncoded == nil").
-			Str("errRef", guid.String()).
-			Msg("jwt_signing_key from database is nil")
-		e, _ := json.Marshal(&GeneralRestError{
-			ErrorInstanceID: guid.String(),
-			ErrorMessage:    "server side failure. please report the error_instance_id to the admin",
-		})
-		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
-	}
-
-	// Decode the PEM formatted RSA private signing key
-	block, _ := pem.Decode([]byte(jwtSingingKeyEncoded.ConfigValue))
-	if block == nil || block.Type != "RSA PRIVATE KEY" {
-		guid := xid.New()
-		log.Error().
-			Str("method", c.Method()).
-			Str("originalURL", c.OriginalURL()).
-			Str("function", "authCallback::pem.Decode([]byte(jwtSingingKeyEncoded.ConfigValue))").
-			Str("errRef", guid.String()).
-			Msg("Unable to decode jwt_signing_key PEM from database")
-		e, _ := json.Marshal(&GeneralRestError{
-			ErrorInstanceID: guid.String(),
-			ErrorMessage:    "server side failure. please report the error_instance_id to the admin",
-		})
-		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
-	}
-
-	// Parse the PEM encoded RSA private signing key
-	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		guid := xid.New()
-		log.Error().
-			Err(err).
-			Str("method", c.Method()).
-			Str("originalURL", c.OriginalURL()).
-			Str("function", "authCallback::x509.ParsePKCS1PrivateKey(block.Bytes)").
-			Str("errRef", guid.String()).
-			Msg("Unable to parse PEM to RSA private key")
-		e, _ := json.Marshal(&GeneralRestError{
-			ErrorInstanceID: guid.String(),
-			ErrorMessage:    "server side failure. please report the error_instance_id to the admin",
-		})
-		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
-	}
-
-	//userURL := me.URL
-	//userID := me.ID
-	//instanceURL
 
 	// Create the JWT claims
 	claims := JWTClaims{
-		*accessToken,
+		*accessToken, // Encode the user's Mastodon access token
 		jwt.RegisteredClaims{
 			// A usual scenario is to set the expiration time relative to the current time
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * 7 * time.Hour)), // 1 week
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)), // 1 week
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
-			Issuer:    "mastostart",
-			Subject:   me.URL,
-			ID:        string(me.ID),
+			Issuer:    appName,
+			Subject:   me.URL,        // Fully qualified URL representing the user
+			ID:        string(me.ID), // Mastodon (numeric) user ID
 		},
 	}
 
@@ -366,5 +332,10 @@ func (cfg *Config) authCallback(c *fiber.Ctx) error {
 	}
 
 	// Return the signed JWT
-	return c.JSON(fiber.Map{"token": signedJWT})
+	return c.JSON(
+		fiber.Map{
+			"token": signedJWT,
+			"type":  "Bearer",
+		},
+	)
 }

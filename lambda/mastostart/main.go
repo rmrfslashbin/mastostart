@@ -41,14 +41,14 @@ func main() {
 
 	db, err := database.New()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create database")
+		log.Fatal().Err(err).Msg("main(): non-starter: failed to create database")
 	}
 
 	if a, err := app.New(
 		app.WithDB(db),
 		app.WithLogger(&log),
 	); err != nil {
-		log.Fatal().Err(err).Msg("Failed to create app")
+		log.Fatal().Err(err).Msg("main(): non-starter: failed to create app")
 	} else {
 		lambda.Start(a.LambdaHandler)
 	}

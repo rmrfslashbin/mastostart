@@ -2,23 +2,37 @@ package app
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/url"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/mattn/go-mastodon"
 	"github.com/rmrfslashbin/mastostart/pkg/mastoclient"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 )
 
+// authVerify is the handler for the /auth/verify endpoint
 func (cfg *Config) authVerify(c *fiber.Ctx) error {
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	accessToken := claims["access_token"].(string)
-	subject := claims["sub"].(string)
-	//userid := claims["jti"].(string)
+	// This function is a PoC to show how to grab the user's data from the JWT
+	// and then transact on the Mastodon instance with the user's access token.
 
+	// Get the jwtToken from the JWT
+	jwtToken := c.Locals("user").(*jwt.Token)
+
+	// Get the JWT claims
+	claims := jwtToken.Claims.(jwt.MapClaims)
+
+	// Get user's Mastodon access token from the JWT claims
+	accessToken := claims["access_token"].(string)
+
+	// Subject is the fully qualified URL to the user's account
+	subject := claims["sub"].(string)
+
+	// userid is the user's numeric ID in the Mastodon instance
+	userid := mastodon.ID(claims["jti"].(string))
+
+	// subjectURL is a fully qualified URL to the user's account
 	subjectURL, err := url.Parse(subject)
 	if err != nil {
 		guid := xid.New()
@@ -37,8 +51,13 @@ func (cfg *Config) authVerify(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
 	}
 
+	// username is the user's username in the Mastodon instance.
+	// Most Mastodon API calls require the UserID and not the username
+	// but we can parse it out and use it if needed.
 	//username := strings.TrimPrefix(subjectURL.Path, "/@")
-	instanceURL := fmt.Sprintf("https://%s", subjectURL.Host)
+
+	// Construct the instance URL
+	instanceURL := "https://" + subjectURL.Host
 
 	// Get the app credentials from the database
 	appCreds, err := cfg.db.GetAppCredentials(subjectURL.Host)
@@ -76,12 +95,12 @@ func (cfg *Config) authVerify(c *fiber.Ctx) error {
 	}
 
 	// Create a new mastoclient instance
-	mastodon, err := mastoclient.New(
-		mastoclient.WithInstance(&instanceURL),
-		mastoclient.WithClientkey(&appCreds.ClientID),
-		mastoclient.WithClientSecret(&appCreds.ClientSecret),
-		mastoclient.WithAccessToken(&accessToken),
-		mastoclient.WithLogger(cfg.log),
+	mc, err := mastoclient.New(
+		mastoclient.WithInstance(&instanceURL),               // Mastodon instance URL from the JWT subject claim
+		mastoclient.WithClientkey(&appCreds.ClientID),        // Mastodon app client ID from the database
+		mastoclient.WithClientSecret(&appCreds.ClientSecret), // Mastodon app client secret from the database
+		mastoclient.WithAccessToken(&accessToken),            // Mastodon user access token from the JWT claims
+		mastoclient.WithLogger(cfg.log),                      // You know, for logging
 	)
 	if err != nil {
 		guid := xid.New()
@@ -103,7 +122,9 @@ func (cfg *Config) authVerify(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
 	}
 
-	me, err := mastodon.Me()
+	// Get the user's Mastodon profile.
+	// The Me() funtion assumes the identity of the user based on the access token
+	me, err := mc.Me()
 	if err != nil {
 		guid := xid.New()
 		log.Error().
@@ -111,7 +132,7 @@ func (cfg *Config) authVerify(c *fiber.Ctx) error {
 			Str("method", c.Method()).
 			Str("originalURL", c.OriginalURL()).
 			Str("errRef", guid.String()).
-			Str("function", "authVerify::mastodon.me()").
+			Str("function", "authVerify::mc.me()").
 			Msg("Unable to get user details from mastodon")
 		e, _ := json.Marshal(&GeneralRestError{
 			ErrorInstanceID: guid.String(),
@@ -120,5 +141,27 @@ func (cfg *Config) authVerify(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrPreconditionRequired.Code).SendString(string(e))
 	}
 
-	return c.JSON(&me)
+	// Get the user's last status from Mastodon
+	lastStatus, err := mc.GetLastStatus(&userid)
+	if err != nil {
+		guid := xid.New()
+		log.Error().
+			Err(err).
+			Str("method", c.Method()).
+			Str("originalURL", c.OriginalURL()).
+			Str("errRef", guid.String()).
+			Str("function", "authVerify::mc.GetLastStatus(&userid)").
+			Msg("Unable to get user's last status from Mastodon")
+		e, _ := json.Marshal(&GeneralRestError{
+			ErrorInstanceID: guid.String(),
+			ErrorMessage:    "unable to fetch user's last status from Mastodon. please report the error_instance_id to the admin",
+		})
+		return c.Status(fiber.ErrPreconditionRequired.Code).SendString(string(e))
+	}
+
+	// Return the user's profile and last status
+	return c.JSON(&AuthVerifyReturn{
+		Account:    me,
+		LastStatus: lastStatus,
+	})
 }

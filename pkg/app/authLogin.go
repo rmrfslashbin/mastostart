@@ -3,7 +3,6 @@ package app
 import (
 	"encoding/json"
 	"net/url"
-	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/rmrfslashbin/mastostart/pkg/database"
@@ -11,8 +10,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// authLogin is the handler for the /auth/login endpoint
 func (cfg *Config) authLogin(c *fiber.Ctx) error {
-	// get the username and instance URL from the query params
+	// get the username from the query params
 	username := c.Query("username")
 	if username == "" {
 		guid := xid.New()
@@ -29,6 +29,7 @@ func (cfg *Config) authLogin(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrBadRequest.Code).SendString(string(e))
 	}
 
+	// get the instance_url from the query params
 	rawInstanceURL := c.Query("instance_url")
 	if rawInstanceURL == "" {
 		guid := xid.New()
@@ -45,6 +46,7 @@ func (cfg *Config) authLogin(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrBadRequest.Code).SendString(string(e))
 	}
 
+	// Parse the instance_url
 	instanceURL, err := url.Parse(rawInstanceURL)
 	if err != nil {
 		guid := xid.New()
@@ -62,17 +64,16 @@ func (cfg *Config) authLogin(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrBadRequest.Code).SendString(string(e))
 	}
 
-	// Get the instance permit list
-	permitInstances, err := cfg.db.GetConfig("permit_instances")
+	permitted, err := cfg.checkPermitInstanceList(instanceURL)
 	if err != nil {
 		guid := xid.New()
 		log.Error().
 			Err(err).
 			Str("method", c.Method()).
 			Str("originalURL", c.OriginalURL()).
-			Str("function", "authCallback::cfg.db.GetConfig('permit_instances')").
+			Str("function", "authLogin::cfg.checkPermitInstanceList(instanceURL)").
 			Str("errRef", guid.String()).
-			Msg("Unable get permit_instances from database")
+			Msg("Unable get do permit instance list check")
 		e, _ := json.Marshal(&GeneralRestError{
 			ErrorInstanceID: guid.String(),
 			ErrorMessage:    "server side failure. please report the error_instance_id to the admin",
@@ -80,30 +81,20 @@ func (cfg *Config) authLogin(c *fiber.Ctx) error {
 		return c.Status(fiber.ErrInternalServerError.Code).SendString(string(e))
 	}
 
-	// Check if the instance is in the permit list
-	if permitInstances != nil {
-		permitList := make(map[string]struct{})
-		for _, instance := range strings.Split(permitInstances.ConfigValue, ",") {
-			permitList[strings.ToLower(strings.TrimSpace(instance))] = struct{}{}
-		}
-
-		if len(permitList) > 0 {
-			if _, ok := permitList[strings.ToLower(instanceURL.Host)]; !ok {
-				guid := xid.New()
-				cfg.log.Error().
-					Str("method", c.Method()).
-					Str("originalURL", c.OriginalURL()).
-					Str("errRef", guid.String()).
-					Str("function", "authLogin::CheckPermitInstanceList").
-					Str("instanceURL", instanceURL.Host).
-					Msg("instance not in permit list")
-				e, _ := json.Marshal(&GeneralRestError{
-					ErrorInstanceID: guid.String(),
-					ErrorMessage:    "instance not in permit list",
-				})
-				return c.Status(fiber.ErrBadRequest.Code).SendString(string(e))
-			}
-		}
+	if !*permitted {
+		guid := xid.New()
+		cfg.log.Error().
+			Str("method", c.Method()).
+			Str("originalURL", c.OriginalURL()).
+			Str("errRef", guid.String()).
+			Str("function", "authLogin::CheckPermitInstanceList").
+			Str("instanceURL", instanceURL.Host).
+			Msg("instance not in permit list")
+		e, _ := json.Marshal(&GeneralRestError{
+			ErrorInstanceID: guid.String(),
+			ErrorMessage:    "instance not in permit list",
+		})
+		return c.Status(fiber.ErrBadRequest.Code).SendString(string(e))
 	}
 
 	// Get/Setup App credentials
@@ -148,5 +139,4 @@ func (cfg *Config) authLogin(c *fiber.Ctx) error {
 
 	// Return the signed JWT
 	return c.JSON(fiber.Map{"authuri": appCreds.AuthURI})
-
 }
