@@ -2,7 +2,6 @@ package mastoclient
 
 import (
 	"context"
-	"log"
 
 	"github.com/mattn/go-mastodon"
 )
@@ -30,7 +29,16 @@ func (c *Config) AsyncGetAccountStatuses(input *AsyncGetAccountStatusesInput) {
 	for {
 		statuses, err := client.GetAccountStatuses(context.Background(), mastodon.ID(input.ID), &pg)
 		if err != nil {
-			log.Fatal(err)
+			c.log.Error().
+				Err(err).
+				Str("id", input.ID).
+				Str("function", "mastoclient::AsyncGetAccountStatuses::client.GetAccountStatuses()").
+				Msg("error getting statuses")
+			input.Ch <- AsyncStatuses{
+				Statuses: nil,
+				Err:      err,
+			}
+			continue
 		}
 		input.Ch <- AsyncStatuses{
 			Statuses: statuses,
@@ -103,7 +111,6 @@ func (c *Config) AsyncGetFollowers(input *AsyncGetFollowersInput) {
 			Str("for", input.ID).
 			Msg("got followers- witing 5 seconds")
 		pg.SinceID = ""
-		//time.Sleep(5 * time.Second)
 	}
 	// Send pagination info
 	input.Ch <- AsyncFollowers{
@@ -136,7 +143,17 @@ func (c *Config) AsyncGetFollowing(input *AsyncGetFollowingInput) {
 	for {
 		fs, err := client.GetAccountFollowing(context.Background(), mastodon.ID(input.ID), &pg)
 		if err != nil {
-			log.Fatal(err)
+			c.log.Error().
+				Err(err).
+				Str("id", input.ID).
+				Str("function", "mastoclient::AsyncGetFollowing::client.GetAccountFollowing()").
+				Msg("error getting statuses")
+			input.Ch <- AsyncFollowing{
+				Following:  nil,
+				Pagination: nil,
+				Err:        err,
+			}
+			continue
 		}
 		input.Ch <- AsyncFollowing{
 			Following:  fs,
