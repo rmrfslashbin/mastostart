@@ -25,6 +25,8 @@ func (config *DDB) PutList(list *List) error {
 
 func (config *DDB) PutAccountsInList(listMember *ListMember) error {
 	input := &dynamodb.BatchWriteItemInput{}
+	input.RequestItems = make(map[string][]types.WriteRequest)
+
 	type entry struct {
 		ListID string
 		UserID string

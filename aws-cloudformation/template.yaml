@@ -109,6 +109,7 @@ Resources:
               - dynamodb:PutItem
               - dynamodb:Query
               - dynamodb:DeleteItem
+              - dynamodb:BatchWriteItem
             Resource:
               - !GetAtt DDBAppCredsTable.Arn
               - !GetAtt DDBConfigTable.Arn
