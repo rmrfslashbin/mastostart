@@ -126,13 +126,15 @@ func (cfg *Config) apiAccountsInList(c *fiber.Ctx) error {
 		}
 
 		psk = base64.StdEncoding.EncodeToString(b)[0:32]
+		instanceURL, _ := url.Parse(*flight.InstanceURL)
 
 		if err = cfg.db.PutList(&database.List{
-			ListID:     string(listID),
-			ListTitle:  list.Title,
-			OwerUserID: string(*flight.Userid),
-			Public:     public,
-			PSK:        psk,
+			Instance:    instanceURL.Host,
+			ListID:      string(listID),
+			ListTitle:   list.Title,
+			OwnerUserID: string(*flight.Userid),
+			Public:      public,
+			PSK:         psk,
 		}); err != nil {
 			guid := xid.New()
 			log.Error().

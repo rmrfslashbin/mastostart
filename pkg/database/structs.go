@@ -32,14 +32,18 @@ type ConfigItem struct {
 
 // List represents a list item in the database.
 type List struct {
+	// Instance is the host of the Mastodon instance.
+	// ex: mastodon.social
+	Instance string `json:"instance"`
+
 	// ListID is the Mastodon (numeric) list ID.
 	ListID string `json:"list_id"`
 
 	// ListTitle is the title of the list.
 	ListTitle string `json:"list_title"`
 
-	// OwerUserID is the Mastodon (numeric) user ID of the list owner.
-	OwerUserID string `json:"owner_user_id"`
+	// OwnerUserID is the Mastodon (numeric) user ID of the list owner.
+	OwnerUserID string `json:"owner_user_id"`
 
 	// PSK is the pre-shared key for the list.
 	// This is used to share the list with other users.

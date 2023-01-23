@@ -16,7 +16,7 @@ func (config *DDB) PutList(list *List) error {
 		return err
 	}
 	input := &dynamodb.PutItemInput{
-		TableName: aws.String(config.tableAppCredentials),
+		TableName: aws.String(config.tableLists),
 		Item:      item,
 	}
 	_, err = config.db.PutItem(context.TODO(), input)

@@ -58,12 +58,12 @@ Resources:
       TableName: !Sub "${ParamDDBTablePrefix}lists"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: OwerUserID
+        - AttributeName: OwnerUserID
           AttributeType: S
         - AttributeName: ListID
           AttributeType: S
       KeySchema:
-        - AttributeName: OwerUserID
+        - AttributeName: OwnerUserID
           KeyType: HASH
         - AttributeName: ListID
           KeyType: RANGE
