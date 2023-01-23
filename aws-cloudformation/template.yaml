@@ -112,6 +112,8 @@ Resources:
             Resource:
               - !GetAtt DDBAppCredsTable.Arn
               - !GetAtt DDBConfigTable.Arn
+              - !GetAtt DDBListsTable.Arn
+              - !GetAtt DDBAccountsInListTable.Arn
 
   RoleLambdaExecution:
     Type: AWS::IAM::Role
