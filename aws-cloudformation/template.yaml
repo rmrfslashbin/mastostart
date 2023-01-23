@@ -52,6 +52,48 @@ Resources:
         - Key: "Application"
           Value: !Ref ParamAppName
 
+  DDBListsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ParamDDBTablePrefix}lists"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: OwerUserID
+          AttributeType: S
+        - AttributeName: ListID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: OwerUserID
+          KeyType: HASH
+        - AttributeName: ListID
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: "Application"
+          Value: !Ref ParamAppName
+
+  DDBAccountsInListTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ParamDDBTablePrefix}accounts-in-list"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ListID
+          AttributeType: S
+        - AttributeName: UserID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ListID
+          KeyType: HASH
+        - AttributeName: UserID
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: "Application"
+          Value: !Ref ParamAppName
+
   PolicyMastostartDDBAccess:
     Type: "AWS::IAM::Policy"
     Properties:
@@ -163,6 +205,12 @@ Outputs:
   ConfigTable:
     Description: The name of the DDB table for config.
     Value: !Ref DDBConfigTable
+  ListsTable:
+    Description: The name of the DDB table for lists.
+    Value: !Ref DDBListsTable
+  AccountsInListTable:
+    Description: The name of the DDB table for accounts in lists.
+    Value: !Ref DDBAccountsInListTable
   ApiGateway:
     Description: API Gateway endpoint URL for Staging stage for mastostart API
     Value: !GetAtt HttpApi.ApiEndpoint

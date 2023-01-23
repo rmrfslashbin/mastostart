@@ -29,3 +29,32 @@ type ConfigItem struct {
 	ConfigKey   string `json:"config_key"`
 	ConfigValue string `json:"config_value"`
 }
+
+// List represents a list item in the database.
+type List struct {
+	// ListID is the Mastodon (numeric) list ID.
+	ListID string `json:"list_id"`
+
+	// ListTitle is the title of the list.
+	ListTitle string `json:"list_title"`
+
+	// OwerUserID is the Mastodon (numeric) user ID of the list owner.
+	OwerUserID string `json:"owner_user_id"`
+
+	// PSK is the pre-shared key for the list.
+	// This is used to share the list with other users.
+	// Optional. One will be generated if not provided.
+	PSK string `json:"psk"`
+
+	// Public is a boolean indicating if the list is public or not.
+	Public bool `json:"public"`
+}
+
+// ListMember represents a list member item in the database.
+type ListMember struct {
+	// ListID is the Mastodon (numeric) list ID.
+	ListID string `json:"list_id"`
+
+	// UserIDs are the Mastodon (numeric) user IDs of the list members.
+	UserIDs []string `json:"user_id"`
+}

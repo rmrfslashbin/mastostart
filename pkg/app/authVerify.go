@@ -16,6 +16,7 @@ import (
 func (cfg *Config) authVerify(c *fiber.Ctx) error {
 	// This function is a PoC to show how to grab the user's data from the JWT
 	// and then transact on the Mastodon instance with the user's access token.
+	// Most of this code is consolidated into the preflight() function.
 
 	// Get the jwtToken from the JWT
 	jwtToken := c.Locals("user").(*jwt.Token)

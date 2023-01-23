@@ -128,6 +128,20 @@ func (cfg *Config) preflight() (*mastodon.Client, error) {
 	return client, nil
 }
 
+func (cfg *Config) GetAccountsInList(listId *mastodon.ID) ([]*mastodon.Account, error) {
+	client, err := cfg.preflight()
+	if err != nil {
+		return nil, err
+	}
+
+	accounts, err := client.GetListAccounts(context.Background(), *listId)
+	if err != nil {
+		return nil, err
+	}
+
+	return accounts, nil
+}
+
 // GetAuthTokenFromCode gets an auth token from an auth code
 func (cfg *Config) GetAuthTokenFromCode(authCode *string, redirectURI *string) (*string, error) {
 	client, err := cfg.preflight()
@@ -187,6 +201,25 @@ func (cfg *Config) Me() (*mastodon.Account, error) {
 		return nil, err
 	}
 	return user, nil
+}
+
+// MyLists gets the lists of the current user. Set listId to get a specific list or nil to get all lists.
+func (cfg *Config) MyLists(listId *mastodon.ID) ([]*mastodon.List, error) {
+	client, err := cfg.preflight()
+	if err != nil {
+		return nil, err
+	}
+
+	if listId != nil {
+		if list, err := client.GetList(context.Background(), *listId); err != nil {
+			return nil, err
+		} else {
+			return []*mastodon.List{list}, nil
+		}
+	} else {
+		return client.GetLists(context.Background())
+	}
+
 }
 
 // Post a toot

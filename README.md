@@ -14,7 +14,7 @@ This is the dev branch.
 - REQUIRED: Run `mastostart config set --key scopes --value ${csv_of_scopes}`. Value should be a comma-separated list of scopes you want to request from the user. Example: `read,write,follow`.
 - OPTIONAL: Run `mastostart config set --key permit_instances --value ${csv_of_instances}`. Value should be a comma-separated list of Mastodon instances (hostnames only) you want to allow users to login to. Leave blank to permit all. Example: `mastodon.social,pleroma.site`.
 
-## Endpoints
+## Auth Endpoints
 - `GET /` - Hello!.
 - `GET /auth/callback` - Callback for OAuth2. Retuns a JWT.
   - `?code=${code}` - Required. The OAuth2 code.
@@ -24,3 +24,10 @@ This is the dev branch.
   - `?instance_url=${instance_url}` - Required. The Mastodon instance to login to.
 - `GET /auth/verify` - Verifies a JWT. Returns the user's Mastodon profile and last status/post.
   - Authorization: Bearer ${jwt}
+
+## General API Endpoints
+### Lists
+- `GET /api/myLists` - Returns a list of the user's lists.
+- `GET /api/myLists/:listID` - Returns a list.
+  - OPTIONAL: `?save=true` - Save the list in the Mastostart database.
+  - OPTIONAL: `?public=true` - Make the list public.

@@ -17,8 +17,10 @@ type DDB struct {
 	profile              string
 	region               string
 	tablePrefix          string
+	tableAccountsInList  string
 	tableAppCredentials  string
 	tableConfig          string
+	tableLists           string
 	tableUserCredentials string
 }
 
@@ -42,9 +44,11 @@ func New(opts ...func(*DDB)) (*DDB, error) {
 	}
 
 	// Set the table names
+	cfg.tableAccountsInList = cfg.tablePrefix + "accounts-in-list"
 	cfg.tableAppCredentials = cfg.tablePrefix + "app-credentials"
 	cfg.tableConfig = cfg.tablePrefix + "config"
 	cfg.tableUserCredentials = cfg.tablePrefix + "user-credentials"
+	cfg.tableLists = cfg.tablePrefix + "lists"
 
 	// Config DynamoDB
 	c, err := config.LoadDefaultConfig(context.TODO(), func(o *config.LoadOptions) error {

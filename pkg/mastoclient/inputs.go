@@ -29,6 +29,7 @@ type AsyncGetNotificationsInput struct {
 	Ch      chan AsyncNotices
 }
 
+// RegisterAppInput is a struct for registering an app
 type RegisterAppInput struct {
 	ClientName  string
 	InstanceURL string

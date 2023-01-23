@@ -101,6 +101,10 @@ func (cfg *Config) appSetup() error {
 	// Add auth routes
 	cfg.app.Get("/auth/verify", cfg.authVerify)
 
+	// List routes
+	cfg.app.Get("/api/myLists", cfg.apiMyLists)
+	cfg.app.Get("/api/myLists/:listID", cfg.apiAccountsInList)
+
 	return nil
 }
 
