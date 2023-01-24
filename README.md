@@ -33,5 +33,5 @@ This is the dev branch.
   - OPTIONAL: `?public=true` - If saved, make Mastostart-saved list public.
 
 ## Instance API Endpoints
-- `GET /api/instance` - Returns the instance's info.
+- `GET /api/instance` - Returns the instance's info & stats.
 
