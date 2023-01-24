@@ -1,9 +1,6 @@
 # mastostart
 Mastostart provides a simple way to login to Mastodon using OAuth2. It is designed to be used as a backend for a web app.
 
-## Dev Branch 🎉
-This is the dev branch.
-
 ## Set up
 - REQUIRED: Set up AWS CLI.
 - REQUIRED: Run `make deploy` (read the Makefile to see what it does). Make note of the output value for `ApiGateway`. See `redirect_uri` below.
