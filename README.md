@@ -1,6 +1,9 @@
 # mastostart
 Mastostart provides a simple way to login to Mastodon using OAuth2. It is designed to be used as a backend for a web app.
 
+## Dev Branch 🎉
+This is the dev branch.
+
 ## Set up
 - REQUIRED: Set up AWS CLI.
 - REQUIRED: Run `make deploy` (read the Makefile to see what it does). Make note of the output value for `ApiGateway`. See `redirect_uri` below.
@@ -24,7 +27,11 @@ Mastostart provides a simple way to login to Mastodon using OAuth2. It is design
 
 ## General API Endpoints
 ### Lists
-- `GET /api/myLists` - Returns a list of the user's lists.
-- `GET /api/myLists/:listID` - Returns a list.
+- `GET /api/lists` - Returns a list of the user's lists.
+- `GET /api/lists/:listID` - Returns a list.
   - OPTIONAL: `?save=true` - Save the list in the Mastostart database.
-  - OPTIONAL: `?public=true` - Make the list public.
+  - OPTIONAL: `?public=true` - If saved, make Mastostart-saved list public.
+
+## Instance API Endpoints
+- `GET /api/instance` - Returns the instance's info & stats.
+

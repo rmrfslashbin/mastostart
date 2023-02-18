@@ -46,6 +46,14 @@ lambda-build:
 	@GOOS=linux GOARCH=arm64 go build -o bin/lambda/mastostart/bootstrap lambda/mastostart/main.go
 	@printf " done.\n"
 
+lambda-deploy: lambda-build
+	@printf "deploying $(stack_name) lambda functions:\n"
+	@printf "  mastostart"
+	@zip -j -X bootstrap.zip bin/lambda/mastostart/bootstrap
+	@aws --profile $(aws_profile) lambda update-function-code --function-name $(stack_name) --zip-file fileb://bootstrap.zip
+	@rm bootstrap.zip
+	@printf " done.\n"
+
 cfdescribe:
 	@aws --output json --profile $(aws_profile) cloudformation describe-stack-events --stack-name $(stack_name)
 

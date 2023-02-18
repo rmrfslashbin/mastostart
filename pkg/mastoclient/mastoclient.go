@@ -2,7 +2,6 @@ package mastoclient
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 
@@ -156,6 +155,24 @@ func (cfg *Config) GetAuthTokenFromCode(authCode *string, redirectURI *string) (
 	return &client.Config.AccessToken, nil
 }
 
+func (cfg *Config) GetInstanceInfo() (*mastodon.Instance, error) {
+	client, err := cfg.preflight()
+	if err != nil {
+		return nil, err
+	}
+
+	return client.GetInstance(context.Background())
+}
+
+func (cfg *Config) GetInstanceStats() ([]*mastodon.WeeklyActivity, error) {
+	client, err := cfg.preflight()
+	if err != nil {
+		return nil, err
+	}
+
+	return client.GetInstanceActivity(context.Background())
+}
+
 // GetLastStatus gets the last status of a user
 func (cfg *Config) GetLastStatus(id *mastodon.ID) (*mastodon.Status, error) {
 	client, err := cfg.preflight()
@@ -182,11 +199,8 @@ func (cfg *Config) GetUserByID(id string) (*mastodon.Account, error) {
 		return nil, err
 	}
 	// Get user
-	user, err := client.GetAccount(context.Background(), mastodon.ID(id))
-	if err != nil {
-		return nil, err
-	}
-	return user, nil
+
+	return client.GetAccount(context.Background(), mastodon.ID(id))
 }
 
 // Me gets the current user
@@ -196,11 +210,7 @@ func (cfg *Config) Me() (*mastodon.Account, error) {
 		return nil, err
 	}
 	// Get user
-	user, err := client.GetAccountCurrentUser(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	return user, nil
+	return client.GetAccountCurrentUser(context.Background())
 }
 
 // MyLists gets the lists of the current user. Set listId to get a specific list or nil to get all lists.
@@ -219,7 +229,6 @@ func (cfg *Config) MyLists(listId *mastodon.ID) ([]*mastodon.List, error) {
 	} else {
 		return client.GetLists(context.Background())
 	}
-
 }
 
 // Post a toot
@@ -231,7 +240,6 @@ func (cfg *Config) Post(toot *mastodon.Toot) (*mastodon.ID, error) {
 
 	// Post the toot
 	if status, err := client.PostStatus(context.Background(), toot); err != nil {
-		fmt.Println(err)
 		return nil, err
 	} else {
 		return &status.ID, nil
