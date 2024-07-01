@@ -6,7 +6,7 @@ require (
 	github.com/alecthomas/kong v0.8.1
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.29.2
 	github.com/awslabs/aws-lambda-go-api-proxy v0.16.1
-	github.com/gofiber/fiber/v2 v2.52.1
+	github.com/gofiber/fiber/v2 v2.52.5
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/mattn/go-mastodon v0.0.6
 	github.com/rs/xid v1.5.0
